@@ -1,0 +1,49 @@
+{
+  "network": "qieTestnet",
+  "chainId": 1983,
+  "explorer": "https://testnet.qie.digital",
+  "deployer": "0xc6d0342d070168c2e22a71ED522a9897C2092bA8",
+  "mockPriceUsdPerQie": "0.5",
+  "contracts": {
+    "PaymentIntentRegistry": "0xe8Bc30b3edFa330Df5Cb727D5E6F431cB1932efc",
+    "MockOracleCapAdapter": "0x13245B988d57824c123069bD306d18D7e30E7b52",
+    "AgentVault": "0x51089D7ad167Df432b4fEb55F7698D84454C90f9"
+  },
+  "deployTx": {
+    "PaymentIntentRegistry": "0x5ff4a23ff7960b86d65db756f51ac6c7c839e938494379a53870566c1c64d0b7",
+    "MockOracleCapAdapter": "0x847c3ad2dc41bf05c6ade04856749fb1dfeb9422aec524fa7ff81d48f0175a10",
+    "AgentVault": "0x1074c0c3cb1a4b7ae46a3c2d42bb078b046cb3b658e082660966825183a0244c"
+  },
+  "wiringTx": {
+    "setVault": "0xfc2d8a93410423e48698458e49fedc10855ee656477f76bbede26a5923d5ea4d",
+    "setRecorder": "0xff3998a75f964893a5ec6c7a050b373f38f9271b5eabb5c41f53ee06541bf0db"
+  },
+  "deployedAt": "2026-11-15T10:10:47.190Z",
+  "smoke": {
+    "mandateId": "2",
+    "payee": "0x3F95ac0D190060500347d9272264883DCE520a4d",
+    "txs": {
+      "createMandate": "0x110dbac044e4f7f417c0f8709e5963658c2ebf457a715660e8eeda0c1107262d",
+      "fund": "0xc8ad74712ef92a4b883fee14c2d20585dd4fec193234502b3b33b41a39da5136",
+      "addPayee": "0x27a3189022ba7247cdcf608a5ba0ee8595b7b7038963f08c23ccfa37c98c4482",
+      "proposeOk": "0x992e31077c326dfdd086178fe23b0a2194f56a710a7bc87e94d4b67e7ea3b423",
+      "executeOk": "0xb0a7efed33a44f37acec515ea96ed1d1683513d01be9834692ea96b5e64bb6da",
+      "proposeOverCap": "0xc8fdf2e83de0226df55d01b2687335f73ab0b7efbebe05e7dd10c4899deda169",
+      "executeOverCap": "0xb64451e2ada9d5e194705df42b426e4fa7167743486aa3d4683f728cff1b407c"
+    },
+    "inMandatePayment": {
+      "intentId": "1",
+      "amountQie": "0.5",
+      "intentStatus": 1,
+      "payeeReceivedWei": "500000000000000000"
+    },
+    "overCapAttempt": {
+      "intentId": "2",
+      "amountQie": "11",
+      "intentStatus": 2,
+      "refusalReasonCode": "OVER_TX_CAP",
+      "txStatus": "mined (refusal recorded, no revert)"
+    },
+    "ranAt": "2026-11-15T10:12:01.742Z"
+  }
+}
