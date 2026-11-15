@@ -45,5 +45,109 @@
       "txStatus": "mined (refusal recorded, no revert)"
     },
     "ranAt": "2026-11-15T10:12:01.742Z"
+  },
+  "stage3": {
+    "oracleCapAdapter": {
+      "address": "0xD66F7d954865BfBC3457CeD5FCD5270624157f21",
+      "deployTx": "0x10f498c56071bb8121f7e2e644f9c6c655a2bed40fd42aca826269ef47218c76",
+      "feed": "0x3Bc617cF3A4Bb77003e4c556B87b13D556903D17",
+      "maxStalenessSeconds": 86400,
+      "availableOnTestnet": false,
+      "note": "Feed is live on QIE mainnet only; on testnet the adapter fails closed by design."
+    },
+    "wiringCheck": {
+      "adapter": "0xD66F7d954865BfBC3457CeD5FCD5270624157f21",
+      "swapTx": "0xd9ea9fc52f77d8b44cf2516e2bafff446a103a2af5eb11c6c3ca0efd41934568",
+      "mandateId": "3",
+      "fundTx": "0x48d8a3184c8861af5b3673b6cef662b1a8158a4d49dfe542607643cb28fb1d3f",
+      "addPayeeTx": "0xd89cfce98990f92ce8332b1b8eda9da5524ff3b4b18aeec963f921415a9561d1",
+      "proposeTx": "0x7649a4271b2e3de8a32a33e65b6d5280b48cd9690a79e0aca59bb869281e07b9",
+      "intentId": "3",
+      "executeTx": "0x522f1c21e442fee1930747551234551f0f6a56ea2716faeaebc96f36658327ba",
+      "intentStatus": 2,
+      "refusalReasonCode": "ORACLE_UNAVAILABLE",
+      "swapBackTx": "0xe99740d7a6f9d98f0f144c8ca514ed3198b26c35c8356d2f1a64f0626c9525db"
+    },
+    "agentDemo": {
+      "payee": "0x3F95ac0D190060500347d9272264883DCE520a4d",
+      "steps": {
+        "createMandate": {
+          "mandateId": 4,
+          "txHash": "0x05b4ee6acacd167422ee1dd393e526627372a87fe7cb3b7ada0c2a0afdf1493f"
+        },
+        "fundMandate": {
+          "mandateId": 4,
+          "fundedQie": "0.25",
+          "txHash": "0xe2665b42a0ee627b10bc4d3bc11b902c97a6670a3993620763d1468dbf16030d"
+        },
+        "addPayee": {
+          "mandateId": 4,
+          "payee": "0x3F95ac0D190060500347d9272264883DCE520a4d",
+          "qieName": "demo.qie",
+          "txHash": "0x98fad9b2b815c91dea8da80c1fd4c46c537aefd7206d325ee5a3edefecc9cbda"
+        },
+        "readMandate": {
+          "mandateId": 4,
+          "owner": "0xc6d0342d070168c2e22a71ED522a9897C2092bA8",
+          "agent": "0xc6d0342d070168c2e22a71ED522a9897C2092bA8",
+          "status": "Active",
+          "perTxCapUsd": "5.0",
+          "dailyCapUsd": "12.0",
+          "spentInWindowUsd": "0.0",
+          "balanceQie": "0.25",
+          "expiresAt": 1795353088,
+          "expiresAtIso": "2026-11-22T13:11:28.000Z",
+          "payees": [
+            {
+              "address": "0x3F95ac0D190060500347d9272264883DCE520a4d",
+              "qieName": "demo.qie"
+            }
+          ],
+          "oracle": {
+            "adapter": "0x13245B988d57824c123069bD306d18D7e30E7b52",
+            "available": true,
+            "qiePriceUsd": "0.5"
+          }
+        },
+        "proposeInCap": {
+          "intentId": 4,
+          "txHash": "0xa2e2a1408a3351d57b8a0bfa95f4a46a82ee7af002b15da6f80ef45dd70ca1d9",
+          "reference": "demo-invoice-1",
+          "rationale": "Demo invoice #1 — inside the mandate caps, paying demo.qie for services.",
+          "amountQie": "0.1",
+          "payee": "0x3F95ac0D190060500347d9272264883DCE520a4d"
+        },
+        "executeInCap": {
+          "intentId": 4,
+          "txHash": "0x883ee36d8cc7fa7e6a710374486adfadcd7ffd08cc3ea7ac7f794a4fecbd74ec",
+          "txStatus": "mined",
+          "executed": true,
+          "intentStatus": "Executed",
+          "refusalReasonCode": null,
+          "policyPrediction": "ok",
+          "policyMatchedChain": true
+        },
+        "proposeOverCap": {
+          "intentId": 5,
+          "txHash": "0x2f26a1d4bdb4358cd46d8679f97a41b207e8552a3d8e7f3cbf910920d0d39c4a",
+          "reference": "demo-invoice-2",
+          "rationale": "Demo invoice #2 — deliberately above the per-tx cap to prove the chain refuses.",
+          "amountQie": "11",
+          "payee": "0x3F95ac0D190060500347d9272264883DCE520a4d"
+        },
+        "executeOverCap": {
+          "intentId": 5,
+          "txHash": "0xcc4899c039447f1b35007fb5fe0c0725af7aa1ea5c03f2253b574fd4d0160ca0",
+          "txStatus": "mined",
+          "executed": false,
+          "intentStatus": "Refused",
+          "refusalReasonCode": "OVER_TX_CAP",
+          "policyPrediction": "OVER_TX_CAP",
+          "policyMatchedChain": true
+        }
+      },
+      "mandateId": 4,
+      "ranAt": "2026-11-15T13:12:29.766Z"
+    }
   }
 }

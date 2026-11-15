@@ -62,11 +62,67 @@ Set `QIE_DEPLOYER_KEY` in your environment for deploys (never commit a key; `.en
 ## Status
 
 - [x] Design + project skeleton
-- [ ] `AgentVault` + `PaymentIntentRegistry` (testnet, with tests)
-- [ ] Oracle adapter + agent (MCP read layer, policy engine)
-- [ ] Front end + end-to-end testnet demo
+- [x] `AgentVault` + `PaymentIntentRegistry` (testnet, with tests)
+- [x] Oracle adapter + agent (MCP-style tool server, policy engine, scripted testnet demo)
+- [ ] QIE Wallet front end
 - [ ] Mainnet deploy + verification
 - [ ] Pilot users + submission
+
+## Demo (QIE testnet)
+
+The agent layer lives in [`agent/`](agent/): a small tool library with a
+deterministic policy engine, exposed two ways — an **MCP-style tool server**
+(JSON-RPC over stdio, `agent/mcp-server.js`) and a **CLI** (`agent/cli.js`).
+The tools let an AI agent read its mandate and caps from `AgentVault`,
+propose payment intents, and execute them through `PaymentIntentRegistry` —
+where out-of-mandate attempts are refused on-chain with a reason code.
+
+Run the scripted demo against the live testnet deployment:
+
+```bash
+npm run agent:demo
+```
+
+It creates a fresh mandate ($5 per-tx / $12 daily caps), funds it with
+0.25 testnet QIE, registers a payee, then walks the two beats that matter:
+
+1. **In-cap payment executes** — propose 0.1 QIE → policy engine approves →
+   the vault pays; the intent is marked `Executed` in the registry and the
+   payee's balance increases by exactly 0.1 QIE.
+2. **Over-cap payment is refused on-chain** — propose 11 QIE ($5.50 at the
+   testnet mock price) → the policy engine predicts `OVER_TX_CAP` → the
+   vault refuses, the transaction still mines, and the registry records
+   `Refused / OVER_TX_CAP` as proof.
+
+Latest recorded run (2026-11-15, mandate #4): in-cap intent #4 executed
+(tx `0x883ee36d…`), over-cap intent #5 refused `OVER_TX_CAP`
+(tx `0xcc4899c0…`). Full machine-readable record:
+[`deployments/testnet.json`](deployments/testnet.json); human-readable
+deployment log: [DEPLOYMENTS.md](DEPLOYMENTS.md).
+
+To plug the tools into an MCP client instead:
+
+```json
+{ "mcpServers": { "agentpay-guard": { "command": "node", "args": ["agent/mcp-server.js"] } } }
+```
+
+The demo signs with the project's dedicated throwaway **testnet** wallet
+(one wallet plays owner/agent/recorder so the demo is self-contained; the
+contracts enforce the role separation regardless). Mainnet will use a
+separate low-balance agent key whose only power is `executePayment`.
+
+### A note on the oracle
+
+`OracleCapAdapter` wraps the QIE Oracle's QIE/USD feed
+(`0x3Bc617cF…D17`, AggregatorV3, 8 decimals, "QIE / USDT" — verified live
+on mainnet) and **fails closed**: stale, zero/negative, incomplete, or
+unreachable rounds make every payment refuse as `ORACLE_UNAVAILABLE`.
+That feed exists **only on mainnet** — QIE ships no testnet feed — so on
+testnet the real adapter reports unavailable by design (proven live: with
+the real adapter wired in, a payment attempt was refused
+`ORACLE_UNAVAILABLE` on-chain), while testnet execution demos run on a
+mock adapter at $0.50/QIE. The real adapter goes live with the mainnet
+deployment.
 
 ## Originality note
 
