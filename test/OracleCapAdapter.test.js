@@ -97,6 +97,14 @@ describe("OracleCapAdapter (real QIE Oracle adapter)", function () {
     expect(await adapter.isAvailable()).to.equal(false);
   });
 
+  it("fails closed when the feed address has no code (the testnet case)", async function () {
+    const [, nobody] = await ethers.getSigners();
+    const adapterNoFeed = await deployAdapter(nobody.address);
+    expect(await adapterNoFeed.isAvailable()).to.equal(false);
+    await expect(adapterNoFeed.usdValueOf(ethers.parseEther("1")))
+      .to.be.revertedWithCustomError(adapterNoFeed, "PriceUnavailable");
+  });
+
   it("rejects a zero feed address or zero staleness at deploy time", async function () {
     const Adapter = await ethers.getContractFactory("OracleCapAdapter");
     await expect(Adapter.deploy(ethers.ZeroAddress, MAX_STALENESS))

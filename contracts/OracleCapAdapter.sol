@@ -62,14 +62,23 @@ contract OracleCapAdapter is IOracleCapAdapter {
     }
 
     /// @dev Single fail-closed read of the feed. Every failure mode —
-    ///      reverting feed, missing contract (testnet), incomplete round,
-    ///      non-positive answer, zero/future/stale updatedAt — returns
-    ///      ok = false instead of propagating partial data.
+    ///      no contract at the feed address (the testnet case), reverting
+    ///      feed, incomplete round, non-positive answer, zero/future/stale
+    ///      updatedAt — returns ok = false instead of propagating partial
+    ///      data.
     function _readFeed()
         internal
         view
         returns (bool ok, int256 answer, uint8 feedDecimals)
     {
+        // Check for code first and never call into the void: on QIE's EVM
+        // an eth_call whose subcall targets a codeless address can revert
+        // the whole call instead of reaching the try/catch below (observed
+        // on testnet, 2026-11-15), which would break this adapter's own
+        // isAvailable() read. With no code there is no price — fail closed
+        // locally.
+        if (address(feed).code.length == 0) return (false, 0, 0);
+
         uint80 roundId;
         uint256 updatedAt;
         uint80 answeredInRound;
