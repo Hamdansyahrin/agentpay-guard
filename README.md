@@ -121,7 +121,8 @@ python3 -m http.server --directory app 8080
 # then open http://localhost:8080/
 ```
 
-(or just open the hosted copy — see the repository's GitHub Pages site).
+**Live demo: <https://hamdansyahrin.github.io/agentpay-guard/>** (the `app/`
+folder, published via GitHub Pages).
 
 What it does:
 
