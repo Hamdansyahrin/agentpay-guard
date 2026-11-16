@@ -389,6 +389,126 @@
     })();
   });
 
+  // -------------------------------------------------------------- payment
+
+  async function resolvePayeeForPayment() {
+    var input = $("p-payee").value.trim();
+    if (!input) throw new Error("Enter a payee (address or .qie name).");
+    if (ethers.isAddress(input)) return { address: ethers.getAddress(input), qieName: "", via: "address" };
+    return client.resolvePayee(readProvider(), { mandateId: state.selectedId, input: input });
+  }
+
+  function renderPolicy(policy) {
+    var box = $("policy-box");
+    box.hidden = false;
+    box.className = "policy-box " + (policy.ok ? "verdict-ok" : "verdict-refuse");
+    $("policy-verdict").innerHTML = policy.ok
+      ? "✅ <strong>Inside the mandate.</strong> Expected verdict: the vault pays and the intent is marked <strong>Executed</strong>."
+      : "⛔ <strong>Outside the mandate.</strong> Expected verdict: refused on-chain with reason " +
+        '<span class="badge badge-reason">' + esc(policy.predictedRefusal) + "</span>" +
+        " — you can still execute to record that refusal as proof.";
+    var labels = {
+      mandateStatus: function (v) { return "Mandate status: " + v; },
+      expired: function (v) { return v ? "Mandate is expired" : "Mandate not expired"; },
+      payeeAllowed: function (v) { return v ? "Payee is on the allowlist" : "Payee is NOT on the allowlist"; },
+      oracleAvailable: function (v) { return v ? "Oracle adapter available" : "Oracle adapter unavailable"; },
+      usdValue: function (v) { return "Payment value at the adapter price: $" + Number(v).toFixed(4); },
+      perTxCapOk: function (v) { return v ? "Within the per-transaction cap" : "Above the per-transaction cap"; },
+      dailyCapOk: function (v) { return v ? "Within the daily cap" : "Above the daily cap"; },
+      balanceOk: function (v) { return v ? "Mandate balance covers the payment" : "Mandate balance too low"; },
+    };
+    var failing = {
+      expired: true, payeeAllowed: false, oracleAvailable: false,
+      perTxCapOk: false, dailyCapOk: false, balanceOk: false,
+    };
+    var items = [];
+    Object.keys(policy.checks).forEach(function (key) {
+      if (!labels[key]) return;
+      var v = policy.checks[key];
+      var isFail = key in failing && v === failing[key];
+      items.push('<li class="' + (isFail ? "fail" : "") + '">' + esc(labels[key](v)) + "</li>");
+    });
+    $("policy-checks").innerHTML = items.join("");
+    return policy;
+  }
+
+  async function runPolicyCheck() {
+    if (!state.selectedId) { window.alert("Pick a mandate first."); return null; }
+    var resolved = await resolvePayeeForPayment();
+    var policy = await client.policyCheck(readProvider(), {
+      mandateId: state.selectedId,
+      payee: resolved.address,
+      amountQie: $("p-amount").value.trim(),
+    });
+    policy.resolvedPayee = resolved;
+    return renderPolicy(policy);
+  }
+
+  $("policy-btn").addEventListener("click", function () {
+    runPolicyCheck().catch(function (e) {
+      var box = $("policy-box");
+      box.hidden = false;
+      box.className = "policy-box verdict-refuse";
+      $("policy-verdict").textContent = "Could not check: " + (e.message || e);
+      $("policy-checks").innerHTML = "";
+    });
+  });
+
+  function afterPayment() {
+    loadMandates();
+    loadOracle();
+  }
+
+  $("pay-form").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    if (!needSigner()) return;
+    if (!state.selectedId) { window.alert("Pick a mandate first."); return; }
+    var btn = $("pay-btn");
+    btn.disabled = true;
+    (async function () {
+      var resultBox = $("pay-result");
+      resultBox.hidden = false;
+      resultBox.innerHTML = "<h3>Working…</h3><p class='hint'>Resolving the payee, recording the intent, then asking the vault to execute.</p>";
+      try {
+        var resolved = await resolvePayeeForPayment();
+        var out = await client.pay(state.signer, {
+          mandateId: state.selectedId,
+          payee: resolved.address,
+          amountQie: $("p-amount").value.trim(),
+          rationale: $("p-rationale").value.trim(),
+          reference: $("p-reference").value.trim() || undefined,
+        });
+        state.sessionIntents[out.intentId] = {
+          proposeTxHash: out.proposeTxHash,
+          executeTxHash: out.executeTxHash,
+        };
+        renderPolicy({
+          ok: out.executed,
+          predictedRefusal: out.refusalReasonCode,
+          checks: {},
+        });
+        resultBox.innerHTML =
+          "<h3>Intent #" + out.intentId + ": " +
+          (out.executed
+            ? '<span class="badge badge-executed">Executed</span>'
+            : '<span class="badge badge-refused">Refused</span> ' +
+              '<span class="badge badge-reason">' + esc(out.refusalReasonCode || "") + "</span>") +
+          "</h3>" +
+          "<p>Propose tx: " + txLink(out.proposeTxHash, shortAddr(out.proposeTxHash)) +
+          "<br>Execute tx: " + txLink(out.executeTxHash, shortAddr(out.executeTxHash)) + "</p>" +
+          "<p class='hint'>Policy engine predicted " +
+          (out.policyPrediction === "ok" ? "approval" : esc(out.policyPrediction)) +
+          " — the chain " + (out.policyMatchedChain ? "agreed." : "DISAGREED (the chain is the arbiter).") + "</p>";
+        afterPayment();
+      } catch (e) {
+        resultBox.innerHTML = "<h3>Payment failed before execution</h3><p>" +
+          esc(e.shortMessage || e.message || String(e)) + "</p>";
+      } finally {
+        btn.disabled = false;
+      }
+    })();
+  });
+
   // ---------------------------------------------------------------- boot
 
   $("connect-btn").addEventListener("click", function () {
