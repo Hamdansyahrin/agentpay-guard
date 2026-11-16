@@ -86,6 +86,39 @@ Reproduce the wiring check:
 `python3 scripts/with_testnet_key.py npm run deploy:adapter:testnet`
 (it re-deploys a fresh adapter). Reproduce the demo: `npm run agent:demo`.
 
+## QIE Testnet (chainId 1983) — Stage 4, 2026-11-16
+
+### Front end + rehearsal (mandate #5)
+
+The static front end in `app/` (no build step; ethers.js vendored) talks
+to the Stage 2 deployment exclusively through `app/agentpay.js`. The
+rehearsal (`npm run app:rehearse`) drove the DESIGN.md §5 beats through
+that module with the project testnet wallet; the module's policy engine
+predicted the chain's verdict on every beat. Caps $5 / $12, mock adapter
+at $0.50/QIE, payee `0x3F95ac0D190060500347d9272264883DCE520a4d`
+registered as `demo.qie`.
+
+| Step | Tx |
+|---|---|
+| createMandate #5 ($5 / $12 caps, 7d) | `0xff1432d3cd2dc0ea4823e45c79959bc6208fda7491c63cd91aa2fe4e721d4122` |
+| addPayee `demo.qie` | `0x1e6712bea9738cdef05d5c6df921e9bc6d2d322fa5dbfbda5f4184c075267f41` |
+| fund (0.15 QIE) | `0xaabe387dafe188dbb324cb95a2e8c5ec240c9e5f2d5c9f6b4ebd0b9aeb458280` |
+| propose intent #6 (0.1 QIE) | `0xbb35629974f58dee51e0335691d3a1dfc28167b2298bd7437fc4999281ad3e95` |
+| execute → **Executed**, payee received exactly 0.1 QIE | `0x44c31fe93342eba21f7646a2810262898c23396bf918fa84267877e717088e08` |
+| propose intent #7 (11 QIE) | `0x71755c48444010f12fe86791a291b2626fcac10742e8569972fdf7320934a5fd` |
+| execute → **Refused, `OVER_TX_CAP` recorded on-chain** | `0x339ffc2d19a26d229d6d35a05df560701fdd5788771011806c3122ec0aef4afa` |
+| propose intent #8 (0.1 QIE, unknown payee) | `0xaf3d39a4d21c9d93b11d386a083c5af811fb7cacca432fea1e37bf6e40bfeaf8` |
+| execute → **Refused, `PAYEE_NOT_ALLOWED` recorded on-chain** | `0x8211e2b88b701a7781d214f2c9f32dad32523a6c1421fb10c6beb33d54c43c27` |
+| revokeMandate #5 | `0x8f4f39819e655dea8746af0ce8069c390235dd4f32cf5c658d7218470a24b08a` |
+| propose intent #9 (0.1 QIE) | `0xbd551624a05222dc6649db8bae1489dbe31e7234a33b57db4d823d1f999df50e` |
+| execute → **Refused, `MANDATE_REVOKED` recorded on-chain** | `0xa14bc3a748a1b06cb413d6581dd957838fe84dae572c0814ae25ee05fa87d925` |
+
+A headless render check (the app served locally, loaded with no wallet —
+the read-only path) also passed: the oracle strip, mandate picker and
+intent log all rendered live testnet state, including the rehearsal's own
+intents #6–#9 and mandate #5 shown as Revoked. Full machine-readable
+record: `deployments/testnet.json` under `stage4`.
+
 ## QIE Mainnet (chainId 1990)
 
 Not deployed yet — Stage 5, after the security pass (DESIGN.md §7).

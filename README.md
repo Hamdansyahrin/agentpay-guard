@@ -64,7 +64,7 @@ Set `QIE_DEPLOYER_KEY` in your environment for deploys (never commit a key; `.en
 - [x] Design + project skeleton
 - [x] `AgentVault` + `PaymentIntentRegistry` (testnet, with tests)
 - [x] Oracle adapter + agent (MCP-style tool server, policy engine, scripted testnet demo)
-- [ ] QIE Wallet front end
+- [x] QIE Wallet front end (static app in `app/`, full demo rehearsed on testnet)
 - [ ] Mainnet deploy + verification
 - [ ] Pilot users + submission
 
@@ -110,6 +110,66 @@ The demo signs with the project's dedicated throwaway **testnet** wallet
 (one wallet plays owner/agent/recorder so the demo is self-contained; the
 contracts enforce the role separation regardless). Mainnet will use a
 separate low-balance agent key whose only power is `executePayment`.
+
+## Front end (QIE testnet)
+
+The web app lives in [`app/`](app/) — a static single page with **no build
+step and no framework**. Serve the folder with anything static, e.g.:
+
+```bash
+python3 -m http.server --directory app 8080
+# then open http://localhost:8080/
+```
+
+(or just open the hosted copy — see the repository's GitHub Pages site).
+
+What it does:
+
+- **Wallet connect** (QIE Wallet via EIP-6963, or any EIP-1193 wallet) with a
+  network guard for QIE Testnet (1983): a wrong network is a clear read-only
+  state with a one-click switch. With **no wallet at all** the app still
+  renders read-only from the public testnet RPC — mandates, oracle state and
+  the intent log are all live chain data.
+- **Mandate panel** — your mandates from `AgentVault`: USD caps, rolling-24h
+  spend, funded balance, expiry, and the payee allowlist with `.qie` names.
+  Owners can create mandates, fund them, add payees (by address, or by a
+  `.qie` name resolved the same way the agent layer resolves it), pause /
+  resume, and **revoke** — instantly and permanently.
+- **Payment flow** — payee + amount → the deterministic policy engine (the
+  same checks, in the same order as the vault) shows the expected verdict
+  *before* anything is signed. Executing records the intent and shows the
+  outcome read back from the registry: `Executed`, or `Refused` with the
+  exact reason code, with explorer links for both transactions.
+- **Intent log** — every intent in `PaymentIntentRegistry`, newest first,
+  executed and refused alike. The refusals, with their reason badges, are
+  the product's signature feature: "the chain stopped the agent" is
+  provable, not a log line anyone could have edited.
+
+Every chain call the page makes goes through one module,
+[`app/agentpay.js`](app/agentpay.js) — and the rehearsal below imports that
+same module unchanged, so the demo a judge clicks through is the code path
+proven on-chain.
+
+### Front-end rehearsal (Stage 4)
+
+```bash
+npm run app:rehearse
+```
+
+drives the DESIGN.md §5 beats through `agentpay.js` with the project
+testnet wallet: create/fund a mandate (payee registered as `demo.qie`) →
+in-mandate payment **Executed** → over-cap attempt **Refused /
+OVER_TX_CAP** → unknown-payee attempt **Refused / PAYEE_NOT_ALLOWED** →
+revoke → further attempt **Refused / MANDATE_REVOKED**. The policy engine
+predicted the chain's verdict on every beat.
+
+Latest recorded run (2026-11-16, mandate #5): executed intent #6
+(tx `0x44c31fe9…`), refused intents #7 `OVER_TX_CAP` (tx `0x339ffc2d…`),
+#8 `PAYEE_NOT_ALLOWED` (tx `0x8211e2b8…`), #9 `MANDATE_REVOKED`
+(tx `0xa14bc3a7…`). A headless render check (no wallet, read-only) also
+passed against the live contracts. Full record:
+[`deployments/testnet.json`](deployments/testnet.json) under `stage4`;
+human-readable log: [DEPLOYMENTS.md](DEPLOYMENTS.md).
 
 ### A note on the oracle
 

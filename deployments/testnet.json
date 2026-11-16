@@ -149,5 +149,112 @@
       "mandateId": 4,
       "ranAt": "2026-11-15T13:12:29.766Z"
     }
+  },
+  "stage4": {
+    "frontendRehearsal": {
+      "payee": "0x3F95ac0D190060500347d9272264883DCE520a4d",
+      "steps": {
+        "createMandate": {
+          "mandateId": 5,
+          "txHash": "0xff1432d3cd2dc0ea4823e45c79959bc6208fda7491c63cd91aa2fe4e721d4122"
+        },
+        "addPayee": {
+          "mandateId": 5,
+          "payee": "0x3F95ac0D190060500347d9272264883DCE520a4d",
+          "qieName": "demo.qie",
+          "txHash": "0x1e6712bea9738cdef05d5c6df921e9bc6d2d322fa5dbfbda5f4184c075267f41"
+        },
+        "fundMandate": {
+          "mandateId": 5,
+          "fundedQie": "0.15",
+          "txHash": "0xaabe387dafe188dbb324cb95a2e8c5ec240c9e5f2d5c9f6b4ebd0b9aeb458280"
+        },
+        "readMandate": {
+          "mandateId": 5,
+          "owner": "0xc6d0342d070168c2e22a71ED522a9897C2092bA8",
+          "agent": "0xc6d0342d070168c2e22a71ED522a9897C2092bA8",
+          "status": "Active",
+          "statusCode": 0,
+          "perTxCapUsd": "5.0",
+          "dailyCapUsd": "12.0",
+          "spentInWindowUsd": "0.0",
+          "balanceQie": "0.15",
+          "expiresAt": 1795448674,
+          "expiresAtIso": "2026-11-23T15:44:34.000Z",
+          "payees": [
+            {
+              "address": "0x3F95ac0D190060500347d9272264883DCE520a4d",
+              "qieName": "demo.qie"
+            }
+          ],
+          "oracle": {
+            "adapter": "0x13245B988d57824c123069bD306d18D7e30E7b52",
+            "isRealAdapter": false,
+            "available": true,
+            "qiePriceUsd": "0.5"
+          }
+        },
+        "payInMandate": {
+          "intentId": 6,
+          "reference": "rehearsal-invoice-1",
+          "proposeTxHash": "0xbb35629974f58dee51e0335691d3a1dfc28167b2298bd7437fc4999281ad3e95",
+          "executeTxHash": "0x44c31fe93342eba21f7646a2810262898c23396bf918fa84267877e717088e08",
+          "txStatus": "mined",
+          "executed": true,
+          "intentStatus": "Executed",
+          "refusalReasonCode": null,
+          "policyPrediction": "ok",
+          "policyMatchedChain": true
+        },
+        "payOverCap": {
+          "intentId": 7,
+          "reference": "rehearsal-invoice-2",
+          "proposeTxHash": "0x71755c48444010f12fe86791a291b2626fcac10742e8569972fdf7320934a5fd",
+          "executeTxHash": "0x339ffc2d19a26d229d6d35a05df560701fdd5788771011806c3122ec0aef4afa",
+          "txStatus": "mined",
+          "executed": false,
+          "intentStatus": "Refused",
+          "refusalReasonCode": "OVER_TX_CAP",
+          "policyPrediction": "OVER_TX_CAP",
+          "policyMatchedChain": true
+        },
+        "payUnknownPayee": {
+          "intentId": 8,
+          "reference": "rehearsal-invoice-3",
+          "proposeTxHash": "0xaf3d39a4d21c9d93b11d386a083c5af811fb7cacca432fea1e37bf6e40bfeaf8",
+          "executeTxHash": "0x8211e2b88b701a7781d214f2c9f32dad32523a6c1421fb10c6beb33d54c43c27",
+          "txStatus": "mined",
+          "executed": false,
+          "intentStatus": "Refused",
+          "refusalReasonCode": "PAYEE_NOT_ALLOWED",
+          "policyPrediction": "PAYEE_NOT_ALLOWED",
+          "policyMatchedChain": true
+        },
+        "revokeMandate": {
+          "mandateId": 5,
+          "txHash": "0x8f4f39819e655dea8746af0ce8069c390235dd4f32cf5c658d7218470a24b08a"
+        },
+        "payAfterRevoke": {
+          "intentId": 9,
+          "reference": "rehearsal-invoice-4",
+          "proposeTxHash": "0xbd551624a05222dc6649db8bae1489dbe31e7234a33b57db4d823d1f999df50e",
+          "executeTxHash": "0xa14bc3a748a1b06cb413d6581dd957838fe84dae572c0814ae25ee05fa87d925",
+          "txStatus": "mined",
+          "executed": false,
+          "intentStatus": "Refused",
+          "refusalReasonCode": "MANDATE_REVOKED",
+          "policyPrediction": "MANDATE_REVOKED",
+          "policyMatchedChain": true
+        }
+      },
+      "mandateId": 5,
+      "ranAt": "2026-11-16T15:46:23.189Z"
+    },
+    "renderCheck": {
+      "method": "static app served locally (python3 -m http.server) and loaded in a headless DOM (jsdom) with no wallet — the read-only path",
+      "observed": "oracle strip showed the mock adapter available at $0.50/QIE; mandate picker listed mandates #1-#5 (mandate #5 Revoked after the rehearsal); intent log rendered all 9 intents including Executed and Refused rows with OVER_TX_CAP, PAYEE_NOT_ALLOWED and MANDATE_REVOKED badges",
+      "result": "passed",
+      "ranAt": "2026-11-16T15:46:53.017Z"
+    }
   }
 }
