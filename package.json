@@ -13,8 +13,9 @@
     "test": "hardhat test",
     "deploy:adapter:testnet": "hardhat run scripts/deploy_adapter.js --network qieTestnet",
     "agent:demo": "node agent/demo.js",
+    "app:rehearse": "node app/rehearse.js",
     "agent:serve": "node agent/mcp-server.js",
     "agent:cli": "node agent/cli.js"
   },
-  "version": "0.3.0"
+  "version": "0.4.0"
 }
