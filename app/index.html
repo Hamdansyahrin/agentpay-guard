@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentPay Guard — spending mandates for AI agents</title>
+<meta name="description" content="AgentPay Guard: an autonomous wallet with on-chain spending mandates for AI agents. QIE Hackathon 3.0 entry, AI + Autonomous Agents track. Live on QIE testnet.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">🛡️</div>
+    <div>
+      <h1>AgentPay Guard</h1>
+      <p class="tagline">An autonomous wallet with on-chain spending mandates for AI agents.</p>
+    </div>
+  </div>
+  <div class="wallet-box">
+    <span id="network-pill" class="pill pill-muted">QIE Testnet · 1983</span>
+    <span id="account-chip" class="account-chip" hidden></span>
+    <button id="connect-btn" class="btn btn-primary" type="button">Connect wallet</button>
+  </div>
+</header>
+
+<div id="network-banner" class="banner banner-warn" hidden>
+  <strong>Wrong network.</strong>
+  <span id="network-banner-text">This app runs on QIE Testnet (chain 1983).</span>
+  <button id="switch-network-btn" class="btn btn-small" type="button">Switch to QIE Testnet</button>
+  <p class="banner-note">Using QIE Wallet? Testnet is hidden until you enable the testnet
+  toggle in the wallet's settings — switching from here returns error 4902 until then.</p>
+</div>
+
+<div id="nowallet-banner" class="banner banner-info" hidden>
+  <strong>No wallet found.</strong> You are browsing read-only: mandates and the
+  intent log below are live from the testnet contracts. Install QIE Wallet (or any
+  EIP-1193 wallet) and connect to create mandates and pay.
+</div>
+
+<section class="strip" id="oracle-strip" aria-label="Oracle status">
+  <div class="strip-item">
+    <span class="strip-label">Oracle adapter</span>
+    <span id="oracle-adapter" class="mono">loading…</span>
+  </div>
+  <div class="strip-item">
+    <span class="strip-label">Feed status</span>
+    <span id="oracle-status">loading…</span>
+  </div>
+  <div class="strip-item">
+    <span class="strip-label">QIE price (adapter)</span>
+    <span id="oracle-price">—</span>
+  </div>
+  <div class="strip-item">
+    <span class="strip-label">Mode</span>
+    <span id="mode-label">read-only</span>
+  </div>
+</section>
+
+<main class="layout">
+
+  <!-- ============================ mandates ============================ -->
+  <section class="card" id="mandates-card">
+    <div class="card-head">
+      <h2>Mandates</h2>
+      <button id="refresh-mandates-btn" class="btn btn-small" type="button">Refresh</button>
+    </div>
+
+    <div id="mandate-picker-row" class="picker-row">
+      <label for="mandate-select">Mandate</label>
+      <select id="mandate-select"></select>
+      <span id="mandate-scope" class="hint"></span>
+    </div>
+
+    <div id="mandate-detail" class="mandate-detail">
+      <p class="hint" id="mandate-empty">Loading mandates from AgentVault…</p>
+      <dl class="kv" id="mandate-kv" hidden>
+        <div><dt>Status</dt><dd id="m-status"></dd></div>
+        <div><dt>Owner</dt><dd id="m-owner" class="mono"></dd></div>
+        <div><dt>Agent</dt><dd id="m-agent" class="mono"></dd></div>
+        <div><dt>Per-tx cap</dt><dd id="m-txcap"></dd></div>
+        <div><dt>Daily cap</dt><dd id="m-dailycap"></dd></div>
+        <div><dt>Spent (rolling 24h)</dt><dd id="m-spent"></dd></div>
+        <div><dt>Funded balance</dt><dd id="m-balance"></dd></div>
+        <div><dt>Expires</dt><dd id="m-expiry"></dd></div>
+      </dl>
+      <div id="m-payees-wrap" hidden>
+        <h3>Payee allowlist</h3>
+        <ul id="m-payees" class="payee-list"></ul>
+      </div>
+    </div>
+
+    <div class="owner-actions" id="owner-actions" hidden>
+      <form id="fund-form" class="inline-form">
+        <h3>Fund this mandate</h3>
+        <div class="form-row">
+          <input id="fund-amount" type="text" inputmode="decimal" placeholder="Amount in QIE, e.g. 0.25" required>
+          <button class="btn" type="submit">Fund</button>
+        </div>
+      </form>
+
+      <form id="addpayee-form" class="inline-form">
+        <h3>Add a payee</h3>
+        <div class="form-row">
+          <input id="addpayee-address" type="text" placeholder="Payee address 0x…" required>
+          <input id="addpayee-name" type="text" placeholder=".qie name (optional)">
+          <button class="btn" type="submit">Add payee</button>
+        </div>
+      </form>
+
+      <div class="danger-zone">
+        <h3>Mandate controls</h3>
+        <div class="form-row">
+          <button id="pause-btn" class="btn" type="button">Pause</button>
+          <button id="resume-btn" class="btn" type="button">Resume</button>
+          <button id="revoke-btn" class="btn btn-danger" type="button">Revoke mandate</button>
+        </div>
+        <p class="hint">Revoking is instant and permanent. After a revoke, every further
+        payment attempt is refused on-chain with <code>MANDATE_REVOKED</code>.</p>
+        <p id="mandate-action-result" class="result-line" role="status"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= create mandate ========================= -->
+  <section class="card" id="create-card">
+    <div class="card-head"><h2>Create a mandate</h2></div>
+    <form id="create-form">
+      <label>Agent address
+        <input id="c-agent" type="text" placeholder="0x… (defaults to your account)">
+      </label>
+      <div class="form-grid">
+        <label>Per-transaction cap (USD)
+          <input id="c-txcap" type="text" inputmode="decimal" value="5" required>
+        </label>
+        <label>Daily cap (USD)
+          <input id="c-dailycap" type="text" inputmode="decimal" value="12" required>
+        </label>
+        <label>Expires in (days)
+          <input id="c-expiry" type="number" min="1" max="365" value="7" required>
+        </label>
+      </div>
+      <label>First payee (address or .qie name, optional)
+        <input id="c-payee" type="text" placeholder="0x… or name.qie">
+      </label>
+      <label>Payee's .qie name (optional, stored for display)
+        <input id="c-payeename" type="text" placeholder="name.qie">
+      </label>
+      <button class="btn btn-primary" type="submit" id="create-btn">Create mandate</button>
+      <p id="create-result" class="result-line" role="status"></p>
+      <p class="hint">The owner is your connected account. Only the owner can fund, edit
+      the allowlist, pause or revoke; the agent can only execute payments inside the mandate.</p>
+    </form>
+  </section>
+
+  <!-- ============================= payment ============================ -->
+  <section class="card" id="pay-card">
+    <div class="card-head"><h2>Ask the agent to pay</h2></div>
+    <form id="pay-form">
+      <label>Payee (address or .qie name)
+        <input id="p-payee" type="text" placeholder="0x… or name.qie" required>
+      </label>
+      <div class="form-grid">
+        <label>Amount (QIE)
+          <input id="p-amount" type="text" inputmode="decimal" placeholder="0.1" required>
+        </label>
+        <label>Invoice reference
+          <input id="p-reference" type="text" placeholder="invoice-001">
+        </label>
+      </div>
+      <label>Why is the agent paying? (rationale, hashed into the intent)
+        <input id="p-rationale" type="text" placeholder="Paying the November hosting invoice.">
+      </label>
+
+      <div id="policy-box" class="policy-box" hidden>
+        <h3>Policy engine verdict <span class="hint">(deterministic pre-flight — the chain still decides)</span></h3>
+        <p id="policy-verdict"></p>
+        <ul id="policy-checks" class="check-list"></ul>
+      </div>
+
+      <div class="form-row">
+        <button class="btn" type="button" id="policy-btn">Check policy first</button>
+        <button class="btn btn-primary" type="submit" id="pay-btn">Propose &amp; execute payment</button>
+      </div>
+      <div id="pay-result" class="pay-result" hidden></div>
+      <p class="hint">Executing records the intent in PaymentIntentRegistry, then asks
+      AgentVault to pay. Inside the mandate it pays; outside it, the attempt is refused
+      <em>on-chain</em> and the refusal — with its reason code — becomes the proof.</p>
+    </form>
+  </section>
+
+  <!-- ============================ intent log =========================== -->
+  <section class="card card-wide" id="log-card">
+    <div class="card-head">
+      <h2>Intent log <span class="hint">— every payment the agent considered, executed and refused alike</span></h2>
+      <button id="refresh-log-btn" class="btn btn-small" type="button">Refresh</button>
+    </div>
+    <div class="table-wrap">
+      <table id="intent-table">
+        <thead>
+          <tr>
+            <th>#</th><th>When</th><th>Mandate</th><th>Payee</th>
+            <th class="num">Amount (QIE)</th><th>Status</th><th>Reason</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="intent-rows">
+          <tr><td colspan="8" class="hint">Loading intents from PaymentIntentRegistry…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="form-row">
+      <button id="more-log-btn" class="btn btn-small" type="button">Load older intents</button>
+      <span id="log-count" class="hint"></span>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>
+    Contracts on QIE Testnet (1983):
+    <a id="foot-vault" target="_blank" rel="noopener">AgentVault</a> ·
+    <a id="foot-registry" target="_blank" rel="noopener">PaymentIntentRegistry</a> ·
+    <a id="foot-adapter" target="_blank" rel="noopener">OracleCapAdapter</a>
+  </p>
+  <p class="hint">Testnet only — balances are faucet tokens with no value. The real QIE
+  Oracle feed exists on mainnet only, so testnet demos price through a mock adapter at
+  $0.50/QIE; the real adapter is deployed here too and fails closed by design.
+  Need test QIE? <a href="https://www.qie.digital/faucet" target="_blank" rel="noopener">Official faucet</a>
+  (testnet-only; it will never ask for a seed phrase or mainnet funds).</p>
+  <p class="hint">AgentPay Guard — QIE Hackathon 3.0 entry, AI + Autonomous Agents track.
+  Design: <a href="https://github.com/Hamdansyahrin/agentpay-guard/blob/main/DESIGN.md" target="_blank" rel="noopener">DESIGN.md</a>.</p>
+</footer>
+
+<script src="vendor/ethers.umd.min.js"></script>
+<script src="agentpay.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
