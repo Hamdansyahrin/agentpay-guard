@@ -457,6 +457,7 @@
   function afterPayment() {
     loadMandates();
     loadOracle();
+    refreshIntentLog(true);
   }
 
   $("pay-form").addEventListener("submit", function (ev) {
@@ -509,6 +510,78 @@
     })();
   });
 
+  // ------------------------------------------------------------ intent log
+
+  var logState = { shown: 0, total: 0, oldestId: null };
+
+  function payeeNameMap() {
+    var map = {};
+    state.mandates.forEach(function (m) {
+      m.payees.forEach(function (p) {
+        if (p.qieName) map[p.address.toLowerCase()] = p.qieName;
+      });
+    });
+    return map;
+  }
+
+  function intentRow(intent, names) {
+    var tr = document.createElement("tr");
+    var name = names[intent.payee.toLowerCase()];
+    var session = state.sessionIntents[intent.intentId];
+    var link = session
+      ? txLink(session.executeTxHash, "tx ↗")
+      : '<a href="' + client.explorerAddress(cfg.contracts.PaymentIntentRegistry) +
+        '" target="_blank" rel="noopener" title="Open the registry on the explorer">registry ↗</a>';
+    tr.innerHTML =
+      "<td>" + intent.intentId + "</td>" +
+      "<td>" + esc(new Date(intent.createdAt * 1000).toLocaleString()) + "</td>" +
+      "<td>#" + intent.mandateId + "</td>" +
+      "<td>" + (name ? '<span class="payee-name">' + esc(name) + "</span> " : "") +
+      addrLink(intent.payee, shortAddr(intent.payee)) + "</td>" +
+      '<td class="num">' + esc(intent.amountQie) + "</td>" +
+      "<td>" + statusBadge(intent.status) + "</td>" +
+      "<td>" + (intent.refusalReasonCode
+        ? '<span class="badge badge-reason">' + esc(intent.refusalReasonCode) + "</span>"
+        : "—") + "</td>" +
+      "<td>" + link + "</td>";
+    return tr;
+  }
+
+  async function refreshIntentLog(reset) {
+    var tbody = $("intent-rows");
+    try {
+      var page = await client.listIntents(readProvider(), {
+        limit: 25,
+        beforeId: reset ? undefined : logState.oldestId,
+      });
+      var names = payeeNameMap();
+      if (reset) {
+        tbody.innerHTML = "";
+        logState.shown = 0;
+        logState.oldestId = null;
+      }
+      if (!page.intents.length && reset) {
+        tbody.innerHTML = '<tr><td colspan="8" class="hint">No intents recorded yet.</td></tr>';
+      }
+      page.intents.forEach(function (intent) {
+        tbody.appendChild(intentRow(intent, names));
+        logState.oldestId = intent.intentId;
+      });
+      logState.shown += page.intents.length;
+      logState.total = page.total;
+      $("log-count").textContent = "showing " + logState.shown + " of " + logState.total + " intents";
+      $("more-log-btn").disabled = logState.shown >= logState.total;
+    } catch (e) {
+      if (reset) {
+        tbody.innerHTML = '<tr><td colspan="8" class="hint">Could not load intents: ' +
+          esc(e.message || String(e)) + "</td></tr>";
+      }
+    }
+  }
+
+  $("refresh-log-btn").addEventListener("click", function () { refreshIntentLog(true); });
+  $("more-log-btn").addEventListener("click", function () { refreshIntentLog(false); });
+
   // ---------------------------------------------------------------- boot
 
   $("connect-btn").addEventListener("click", function () {
@@ -530,4 +603,5 @@
   if (!injectedProvider()) $("nowallet-banner").hidden = false;
   loadOracle();
   loadMandates();
+  refreshIntentLog(true);
 })();
