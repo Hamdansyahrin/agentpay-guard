@@ -1,12 +1,3 @@
-node_modules/
-artifacts/
+out/
 cache/
-coverage/
-typechain-types/
-
-# secrets — never commit keys, seed phrases, or wallet files
-.env
-*.secret
-*.key
-
-.DS_Store
+.deployer.secret

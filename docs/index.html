@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentPay Guard — spending policy for Agent ID holders</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; line-height: 1.45; }
+  h1 { font-size: 1.5rem; } h2 { font-size: 1.1rem; margin-top: 2rem; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+  .risk { border-color: #c0392b; background: #fdf0ee; }
+  label { display: block; margin: .5rem 0 .2rem; font-size: .9rem; }
+  input { width: 100%; padding: .45rem; box-sizing: border-box; }
+  button { margin-top: .7rem; padding: .5rem 1rem; cursor: pointer; }
+  .muted { color: #555; font-size: .9rem; }
+  .ok { color: #1e7d32; } .bad { color: #c0392b; }
+  code { word-break: break-all; }
+  #log { white-space: pre-wrap; font-size: .85rem; }
+</style>
+</head>
+<body>
+<h1>AgentPay Guard</h1>
+<p>Register your <strong>Agent ID</strong> identity, set an on-chain spending policy
+(per-transaction cap, daily cap, recipient allowlist, human-confirm threshold), and let
+your agent pay only within those rules. Payments above your confirm threshold need your
+explicit on-chain approval first — one approval covers exactly one payment.</p>
+
+<div class="card risk">
+  <strong>Risk note.</strong> This is a policy-enforcement tool for your own funds, not an
+  investment product. It offers <strong>no returns, yield, or profit</strong> of any kind.
+  Funds you deposit are held by a smart contract; smart contracts carry risk, including
+  the risk of bugs. Deposit only what you are prepared to manage carefully. You can
+  withdraw your own funds at any time. Never enter a seed phrase or private key anywhere
+  in this app — it will never ask for one.
+</div>
+
+<div class="card">
+  <button id="connect">Connect wallet</button>
+  <div id="account" class="muted">Not connected.</div>
+  <div id="holder"></div>
+  <div id="reginfo"></div>
+</div>
+
+<div class="card">
+  <h2>1. Register your agent</h2>
+  <p class="muted">Requires holding an Agent ID. Registration mints your soulbound
+  “Guarded Agent” badge. Default policy is fail-closed (all caps 0) until you set one.</p>
+  <label>Agent address (the address your agent will pay from)</label>
+  <input id="agentAddr" placeholder="0x…">
+  <button id="register">Register + mint badge</button>
+</div>
+
+<div class="card">
+  <h2>2. Set spending policy</h2>
+  <label>Per-transaction cap (BNB)</label>
+  <input id="perTx" type="number" step="any" min="0">
+  <label>Daily cap (BNB)</label>
+  <input id="daily" type="number" step="any" min="0">
+  <label>Confirm threshold (BNB) — payments above this need your approval</label>
+  <input id="threshold" type="number" step="any" min="0">
+  <label><input id="enforce" type="checkbox" style="width:auto"> Enforce recipient allowlist</label>
+  <button id="setPolicy">Save policy</button>
+  <label>Allowlist a recipient</label>
+  <input id="allowAddr" placeholder="0x…">
+  <button id="allow">Add to allowlist</button>
+</div>
+
+<div class="card">
+  <h2>3. Fund the vault</h2>
+  <label>Deposit amount (BNB)</label>
+  <input id="depAmt" type="number" step="any" min="0">
+  <button id="deposit">Deposit</button>
+  <div id="vault" class="muted"></div>
+</div>
+
+<div class="card">
+  <h2>4. Approve a large payment (human-confirm tier)</h2>
+  <p class="muted">Approvals are single-use and bound to the exact recipient + amount.</p>
+  <label>Recipient</label>
+  <input id="apprTo" placeholder="0x…">
+  <label>Amount (BNB)</label>
+  <input id="apprAmt" type="number" step="any" min="0">
+  <button id="approvePay">Approve this payment</button>
+</div>
+
+<div class="card"><h2>Activity</h2><div id="log" class="muted">—</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script>
+// ===== Fill these in after deployment + BscScan verification =====
+const GUARD_ADDRESS = "0x295556548c97371dE272cE013459024F31cEF122"; // AgentPayGuard (BSC mainnet)
+const AGENT_ID_ADDRESS = "0x60b9262456de011f7d15a54cdd8c48baaa8b022f"; // SPACE ID Agent ID (BSC)
+const BSC_CHAIN_ID = 56n;
+
+const ERC721_ABI = ["function balanceOf(address) view returns (uint256)"];
+const GUARD_ABI = [
+  "function badge() view returns (address)",
+  "function isAgentIDHolder(address) view returns (bool)",
+  "function getRegistration(address) view returns (address agent, bool active, uint256 registeredAt, uint256 agentIdBalance, bool badgeMinted)",
+  "function getPolicy(address) view returns (uint256 perTxCap, uint256 dailyCap, uint256 confirmThreshold, bool enforceAllowlist)",
+  "function vaultBalance(address, address) view returns (uint256)",
+  "function spentToday(address) view returns (uint256)",
+  "function register(address agent)",
+  "function setPolicy(uint256 perTxCap, uint256 dailyCap, uint256 confirmThreshold, bool enforceAllowlist)",
+  "function setAllowlist(address recipient, bool allowed)",
+  "function deposit() payable",
+  "function withdraw(address token, uint256 amount)",
+  "function approvePayment(address recipient, address token, uint256 amount)"
+];
+const BADGE_ABI = ["function balanceOf(address) view returns (uint256)", "function hasBadge(address) view returns (bool)"];
+
+let provider, signer, account, guard, badge;
+const $ = id => document.getElementById(id);
+const log = m => { $("log").textContent = m + "\n" + ($("log").textContent === "—" ? "" : $("log").textContent); };
+const bnb = v => ethers.parseEther(v || "0");
+
+async function connect() {
+  if (!window.ethereum) { alert("No injected wallet found. Install a wallet extension or use a wallet browser."); return; }
+  provider = new ethers.BrowserProvider(window.ethereum);
+  const net = await provider.getNetwork();
+  if (net.chainId !== BSC_CHAIN_ID) {
+    await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x38" }] });
+    provider = new ethers.BrowserProvider(window.ethereum);
+  }
+  signer = await provider.getSigner();
+  account = await signer.getAddress();
+  $("account").textContent = "Connected: " + account;
+  guard = new ethers.Contract(GUARD_ADDRESS, GUARD_ABI, signer);
+  const agentId = new ethers.Contract(AGENT_ID_ADDRESS, ERC721_ABI, provider);
+  const holds = (await agentId.balanceOf(account)) > 0n;
+  $("holder").innerHTML = holds
+    ? '<span class="ok">Agent ID holder ✓ — you can register.</span>'
+    : '<span class="bad">No Agent ID found for this address — registration will revert.</span>';
+  if (GUARD_ADDRESS !== "0x0000000000000000000000000000000000000000") {
+    badge = new ethers.Contract(await guard.badge(), BADGE_ABI, provider);
+    await refresh();
+  } else {
+    $("reginfo").textContent = "Guard contract address not configured yet (pre-deployment build).";
+  }
+}
+
+async function refresh() {
+  const r = await guard.getRegistration(account);
+  if (r.registeredAt === 0n) { $("reginfo").textContent = "Not registered yet."; return; }
+  const p = await guard.getPolicy(account);
+  const has = await badge.hasBadge(account);
+  const vb = await guard.vaultBalance(account, ethers.ZeroAddress);
+  const spent = await guard.spentToday(account);
+  $("reginfo").innerHTML =
+    `Registered ✓ · agent <code>${r.agent}</code> · active: ${r.active} · badge: ${has ? "held ✓" : "none"}<br>` +
+    `Policy: per-tx ${ethers.formatEther(p.perTxCap)} · daily ${ethers.formatEther(p.dailyCap)} · ` +
+    `confirm above ${ethers.formatEther(p.confirmThreshold)} · allowlist enforced: ${p.enforceAllowlist}`;
+  $("vault").textContent = `Vault: ${ethers.formatEther(vb)} BNB · spent today: ${ethers.formatEther(spent)} BNB`;
+}
+
+async function send(fn, label) {
+  try { const tx = await fn(); log(label + " sent: " + tx.hash); await tx.wait(); log(label + " confirmed."); await refresh(); }
+  catch (e) { log(label + " failed: " + (e.shortMessage || e.message)); }
+}
+
+$("connect").onclick = connect;
+$("register").onclick = () => send(() => guard.register($("agentAddr").value.trim()), "Register");
+$("setPolicy").onclick = () => send(() => guard.setPolicy(bnb($("perTx").value), bnb($("daily").value), bnb($("threshold").value), $("enforce").checked), "Set policy");
+$("allow").onclick = () => send(() => guard.setAllowlist($("allowAddr").value.trim(), true), "Allowlist");
+$("deposit").onclick = () => send(() => guard.deposit({ value: bnb($("depAmt").value) }), "Deposit");
+$("approvePay").onclick = () => send(() => guard.approvePayment($("apprTo").value.trim(), ethers.ZeroAddress, bnb($("apprAmt").value)), "Approve payment");
+</script>
+</body>
+</html>

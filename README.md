@@ -1,192 +1,100 @@
-# AgentPay Guard
+# AgentPay Guard for Agent ID
 
-**An autonomous wallet with on-chain spending mandates for AI agents.**
+An on-chain spending-policy vault for AI agents, gated by SPACE ID **Agent ID**
+identity — built for the Binance Agent ID Hackathon (Binance Wallet × BNB Chain).
 
-Built by **Hamdan Hidayat** as a solo entry for **QIE Hackathon 3.0** (2026, Mainnet
-Edition), track **AI + Autonomous Agents**. 🚧 Work in progress — this repository is being
-built in public, in stages, during the hackathon window (submission deadline 30 Nov 2026,
-23:59 CET).
+An Agent ID holder registers their agent identity, sets a spending policy
+(per-transaction cap, daily cap, optional recipient allowlist, human-confirm
+threshold), and funds a vault. The registered agent can pay **only** within that
+policy. Payments above the confirm threshold require the owner's explicit,
+single-use, exact-amount approval recorded on-chain first.
 
-## The idea
+AgentPay Guard is a guardrail for your own funds. **It is not an investment
+product and promises no returns of any kind.**
 
-Give an AI agent a wallet and it can pay anyone, anything, until the money is gone.
-AgentPay Guard gives the agent a **mandate** instead:
+## How Agent ID is used
 
-- a **payee allowlist** (addresses or human-readable `.qie` names),
-- **per-transaction and daily spending caps denominated in USD** (converted live via the
-  QIE Oracle),
-- an **expiry**, and **instant revoke** by the owner.
+Agent ID contract (BSC mainnet): `0x60b9262456de011f7d15a54cdd8c48baaa8b022f`
+(non-transferable ERC-721 by SPACE ID). Holder check: `balanceOf(address) > 0`.
 
-Payments inside the mandate execute autonomously from a user-funded vault. Anything outside
-it **cannot execute** — and the blocked attempt is recorded on-chain with a reason code, so
-"the chain stopped the agent" is provable. Every payment intent, execution, and refusal sits
-in a public registry: a full audit trail for agent spending.
+- **Registration gate:** `AgentPayGuard.register()` reverts unless the caller
+  holds an Agent ID. No Agent ID → no registration, no badge, no policy.
+- **Identity binding:** the registration records the holder's Agent ID balance
+  at registration time. Agent ID is non-transferable, so the binding cannot be
+  sold or lent after the fact.
+- **Badge precondition:** the soulbound *Guarded Agent* badge (ERC-721,
+  non-transferable) is minted only inside `register()` — i.e. only to verified
+  Agent ID holders, one per holder.
+- **Frontend gate:** the dApp checks `balanceOf` before enabling registration.
 
-## How it fits together
+Agent ID is never used to look up other people's wallets by name; there is no
+name-resolution or people-search feature anywhere in this project.
 
-- **`AgentVault`** — user-funded escrow holding the mandates; the only contract that moves
-  money, and only inside a mandate's rules.
-- **`PaymentIntentRegistry`** — on-chain log of intents and their outcomes
-  (executed / refused + why).
-- **`OracleCapAdapter`** — reads the QIE Oracle QIE/USD feed and converts USD caps to token
-  amounts; fails closed if the feed is stale.
-- **The agent** reads chain state through the read-only **QIE Wallet MCP**, drafts payment
-  intents with a plain-language rationale, and a deterministic policy engine re-checks every
-  field before signing. Its dedicated key can only call `executePayment` — never edit a
-  mandate or withdraw.
-- **Front end** connects with **QIE Wallet**.
+## Contracts
 
-Full design: [DESIGN.md](DESIGN.md).
+| Contract | What it does |
+|----------|--------------|
+| `contracts/AgentPayGuard.sol` | Registry + policy + vault. Constructor deploys the badge. No admin, no proxy, no upgrade path, no fees. |
+| `contracts/GuardBadge.sol` | Soulbound "Guarded Agent" badge (minimal ERC-721; all transfers revert). Mintable only by the Guard, once per registered holder. |
 
-## Networks
+Full design — policy model, payment flow, owner-permission surface, judging
+mapping, holder-acquisition plan, gas numbers, risks: see **DESIGN.md**.
 
-| | Chain ID | RPC | Explorer |
-|---|---|---|---|
-| QIE Testnet | 1983 | https://rpc1testnet.qie.digital/ | https://testnet.qie.digital/ |
-| QIE Mainnet | 1990 | https://rpc1mainnet.qie.digital/ | https://mainnet.qie.digital/ |
+## Build & test (local)
 
-Development happens on testnet first (free faucet tokens at https://www.qie.digital/faucet —
-note: the official faucet is testnet-only and will never ask for a seed phrase, private key,
-or any mainnet funds). Mainnet deployment follows once the design is proven on testnet.
+Requires Foundry (`forge`). No other dependencies — the test suite uses a
+hand-declared cheatcode interface instead of forge-std.
 
-## Getting started
-
-```bash
-npm install
-npx hardhat compile
+```sh
+forge build --sizes
+forge test
 ```
 
-Set `QIE_DEPLOYER_KEY` in your environment for deploys (never commit a key; `.env` and
-`*.secret` files are gitignored).
+Local results for v1:
 
-## Status
+- `AgentPayGuard` runtime 6,452 B · `GuardBadge` runtime 2,116 B
+- Deployment (one transaction, badge included), measured on a local anvil
+  node: **1,965,339 gas** → 0.00088 BNB covers it at any gas price
+  ≤ ~0.44 gwei (BSC has traded well below that in 2025–26; at a conservative
+  1 gwei it would cost ~0.00197 BNB and would not fit — deploy in a low-fee
+  window or after a small top-up).
+- Tests: **14/14 pass** — non-holder cannot register; holder registers and
+  receives the badge; badge is soulbound; policy set + access control; BNB and
+  ERC-20 payments within policy execute; above per-tx cap reverts; above daily
+  cap reverts; non-allowlisted recipient reverts; above-threshold payment
+  requires a recorded owner approval, the approval is single-use and
+  exact-amount; non-agent cannot pay; deactivated registration cannot pay;
+  owner withdraw works, agent cannot withdraw; daily window resets.
 
-- [x] Design + project skeleton
-- [x] `AgentVault` + `PaymentIntentRegistry` (testnet, with tests)
-- [x] Oracle adapter + agent (MCP-style tool server, policy engine, scripted testnet demo)
-- [x] QIE Wallet front end (static app in `app/`, full demo rehearsed on testnet)
-- [ ] Mainnet deploy + verification
-- [ ] Pilot users + submission
+## Frontend
 
-## Demo (QIE testnet)
+`frontend/index.html` — one static file (ethers v6 via CDN). Connects an
+injected wallet on BSC (chain 56), checks Agent ID holding, and exposes
+register / set policy / allowlist / deposit / approve-payment plus live
+registration, policy, badge, and vault status. Set `GUARD_ADDRESS` at the top
+of the file after deployment. Carries a clear risk note; makes no return
+promises; never asks for a seed phrase or private key.
 
-The agent layer lives in [`agent/`](agent/): a small tool library with a
-deterministic policy engine, exposed two ways — an **MCP-style tool server**
-(JSON-RPC over stdio, `agent/mcp-server.js`) and a **CLI** (`agent/cli.js`).
-The tools let an AI agent read its mandate and caps from `AgentVault`,
-propose payment intents, and execute them through `PaymentIntentRegistry` —
-where out-of-mandate attempts are refused on-chain with a reason code.
+## Deployment checklist (not yet done)
 
-Run the scripted demo against the live testnet deployment:
+1. Read-only `balanceOf` sanity check against the real Agent ID contract.
+2. Deploy `AgentPayGuard(agentID = 0x60b9262456de011f7d15a54cdd8c48baaa8b022f)`
+   from the deploy wallet in a low-fee window (see gas note above).
+3. Verify both contracts on BscScan.
+4. Fill `GUARD_ADDRESS` in `frontend/index.html`; host the page.
+5. Dogfood: register the `juragan.ai` wallet, set a small policy, run one full
+   payment cycle.
 
-```bash
-npm run agent:demo
-```
+## Red-line compliance
 
-It creates a fresh mandate ($5 per-tx / $12 daily caps), funds it with
-0.25 testnet QIE, registers a payee, then walks the two beats that matter:
-
-1. **In-cap payment executes** — propose 0.1 QIE → policy engine approves →
-   the vault pays; the intent is marked `Executed` in the registry and the
-   payee's balance increases by exactly 0.1 QIE.
-2. **Over-cap payment is refused on-chain** — propose 11 QIE ($5.50 at the
-   testnet mock price) → the policy engine predicts `OVER_TX_CAP` → the
-   vault refuses, the transaction still mines, and the registry records
-   `Refused / OVER_TX_CAP` as proof.
-
-Latest recorded run (2026-11-15, mandate #4): in-cap intent #4 executed
-(tx `0x883ee36d…`), over-cap intent #5 refused `OVER_TX_CAP`
-(tx `0xcc4899c0…`). Full machine-readable record:
-[`deployments/testnet.json`](deployments/testnet.json); human-readable
-deployment log: [DEPLOYMENTS.md](DEPLOYMENTS.md).
-
-To plug the tools into an MCP client instead:
-
-```json
-{ "mcpServers": { "agentpay-guard": { "command": "node", "args": ["agent/mcp-server.js"] } } }
-```
-
-The demo signs with the project's dedicated throwaway **testnet** wallet
-(one wallet plays owner/agent/recorder so the demo is self-contained; the
-contracts enforce the role separation regardless). Mainnet will use a
-separate low-balance agent key whose only power is `executePayment`.
-
-## Front end (QIE testnet)
-
-The web app lives in [`app/`](app/) — a static single page with **no build
-step and no framework**. Serve the folder with anything static, e.g.:
-
-```bash
-python3 -m http.server --directory app 8080
-# then open http://localhost:8080/
-```
-
-**Live demo: <https://hamdansyahrin.github.io/agentpay-guard/>** (the `app/`
-folder, published via GitHub Pages).
-
-What it does:
-
-- **Wallet connect** (QIE Wallet via EIP-6963, or any EIP-1193 wallet) with a
-  network guard for QIE Testnet (1983): a wrong network is a clear read-only
-  state with a one-click switch. With **no wallet at all** the app still
-  renders read-only from the public testnet RPC — mandates, oracle state and
-  the intent log are all live chain data.
-- **Mandate panel** — your mandates from `AgentVault`: USD caps, rolling-24h
-  spend, funded balance, expiry, and the payee allowlist with `.qie` names.
-  Owners can create mandates, fund them, add payees (by address, or by a
-  `.qie` name resolved the same way the agent layer resolves it), pause /
-  resume, and **revoke** — instantly and permanently.
-- **Payment flow** — payee + amount → the deterministic policy engine (the
-  same checks, in the same order as the vault) shows the expected verdict
-  *before* anything is signed. Executing records the intent and shows the
-  outcome read back from the registry: `Executed`, or `Refused` with the
-  exact reason code, with explorer links for both transactions.
-- **Intent log** — every intent in `PaymentIntentRegistry`, newest first,
-  executed and refused alike. The refusals, with their reason badges, are
-  the product's signature feature: "the chain stopped the agent" is
-  provable, not a log line anyone could have edited.
-
-Every chain call the page makes goes through one module,
-[`app/agentpay.js`](app/agentpay.js) — and the rehearsal below imports that
-same module unchanged, so the demo a judge clicks through is the code path
-proven on-chain.
-
-### Front-end rehearsal (Stage 4)
-
-```bash
-npm run app:rehearse
-```
-
-drives the DESIGN.md §5 beats through `agentpay.js` with the project
-testnet wallet: create/fund a mandate (payee registered as `demo.qie`) →
-in-mandate payment **Executed** → over-cap attempt **Refused /
-OVER_TX_CAP** → unknown-payee attempt **Refused / PAYEE_NOT_ALLOWED** →
-revoke → further attempt **Refused / MANDATE_REVOKED**. The policy engine
-predicted the chain's verdict on every beat.
-
-Latest recorded run (2026-11-16, mandate #5): executed intent #6
-(tx `0x44c31fe9…`), refused intents #7 `OVER_TX_CAP` (tx `0x339ffc2d…`),
-#8 `PAYEE_NOT_ALLOWED` (tx `0x8211e2b8…`), #9 `MANDATE_REVOKED`
-(tx `0xa14bc3a7…`). A headless render check (no wallet, read-only) also
-passed against the live contracts. Full record:
-[`deployments/testnet.json`](deployments/testnet.json) under `stage4`;
-human-readable log: [DEPLOYMENTS.md](DEPLOYMENTS.md).
-
-### A note on the oracle
-
-`OracleCapAdapter` wraps the QIE Oracle's QIE/USD feed
-(`0x3Bc617cF…D17`, AggregatorV3, 8 decimals, "QIE / USDT" — verified live
-on mainnet) and **fails closed**: stale, zero/negative, incomplete, or
-unreachable rounds make every payment refuse as `ORACLE_UNAVAILABLE`.
-That feed exists **only on mainnet** — QIE ships no testnet feed — so on
-testnet the real adapter reports unavailable by design (proven live: with
-the real adapter wired in, a payment attempt was refused
-`ORACLE_UNAVAILABLE` on-chain), while testnet execution demos run on a
-mock adapter at $0.50/QIE. The real adapter goes live with the mainnet
-deployment.
-
-## Originality note
-
-AgentPay Guard is an original project written for this hackathon. Official QIE SDKs and
-standard open-source libraries are used as attributed dependencies; all application code in
-this repository is new.
+- No QR-code/pairing login; standard injected-wallet connection only.
+- No bypassing user transaction confirmation — every action is a signed wallet
+  transaction; owner approvals are explicit on-chain transactions.
+- No unauthorized, scheduled, or bundled transfers — approvals are single-use
+  and exact-amount; nothing is scheduled or auto-approved.
+- Contracts are open-source; the complete owner-permission surface is
+  documented in NatSpec and in DESIGN.md §3.1.
+- No Binance/BNB brand impersonation in the product name or UI.
+- No collection of seed phrases, private keys, or API secrets.
+- No promised returns anywhere.
+- Agent ID is not packaged as a tool for looking up other people's wallets.
